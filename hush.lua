@@ -21,7 +21,7 @@
 
 addon.name      = 'hush';
 addon.author    = 'Hugin';
-addon.version   = '1.0';
+addon.version   = '1.0.1';
 addon.desc      = 'Hides yells and teleport requests.';
 addon.link      = 'https://github.com/clanofartisans/ashita-hush';
 
@@ -33,9 +33,9 @@ local partyMgr = memMgr:GetParty();
 
 -- Default Settings
 local default_settings = T{
-    remote    = true,
+    remote    = false,
     hushLocal = false,
-    teleport  = true
+    teleport  = false
 };
 
 -- Hush Variables
