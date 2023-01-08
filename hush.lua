@@ -21,7 +21,7 @@
 
 addon.name      = 'hush';
 addon.author    = 'Hugin';
-addon.version   = '1.0.1';
+addon.version   = '1.1';
 addon.desc      = 'Hides yells and teleport requests.';
 addon.link      = 'https://github.com/clanofartisans/ashita-hush';
 
@@ -35,7 +35,8 @@ local partyMgr = memMgr:GetParty();
 local default_settings = T{
     remote    = false,
     hushLocal = false,
-    teleport  = false
+    teleport  = false,
+    synth     = false
 };
 
 -- Hush Variables
@@ -180,6 +181,27 @@ local function is_local(e)
     return false;
 end
 
+local function is_synth(e)
+    local msg = clean_str(e.message_modified);
+    local k = false;
+
+    -- Find successful synthesis..
+    k = (msg:contains(' synthesized ') and not msg:contains('You synthesized '));
+
+    if (k) then
+        return true;
+    end
+
+    -- Find failed synthesis..
+    k = (msg:contains(' lost ') and not msg:contains('You lost '));
+
+    if (k) then
+        return true;
+    end
+
+    return false;
+end
+
 local function is_teleport(e)
     local msg = clean_str(e.message_modified);
     local k = false;
@@ -219,9 +241,11 @@ local function print_help(isError)
         { '/hush remote', 'Hushes remote /yells.' },
         { '/hush local', 'Hushes local /yells.' },
         { '/hush teleport', 'Hushes teleport /shouts and /yells.' },
+        { '/hush synth', "Hushes others' synthesis results." },
         { '/unhush remote', 'Unhushes remote /yells.' },
         { '/unhush local', 'Unhushes local /yells.' },
         { '/unhush teleport', 'Unhushes teleport /shouts and /yells.' },
+        { '/unhush synth', "Unhushes others' synthesis results" },
     };
 
     -- Print the command list..
@@ -257,6 +281,12 @@ local function print_status()
         print(chat.header(addon.name):append(chat.message('Teleports: '):append(chat.color1(6, 'Hushed'))));
     else
         print(chat.header(addon.name):append(chat.message('Teleports: '):append(chat.color1(6, 'Unhushed'))));
+    end
+
+    if (hush.settings.synth) then
+        print(chat.header(addon.name):append(chat.message('Synths: '):append(chat.color1(6, 'Hushed'))));
+    else
+        print(chat.header(addon.name):append(chat.message('Synths: '):append(chat.color1(6, 'Unhushed'))));
     end
 end
 
@@ -316,9 +346,10 @@ ashita.events.register('command', 'command_cb', function (e)
 
          -- Handle: /hush all - Hushes all yells and teleport shouts.
         if (#args == 2 and args[2]:any('all')) then
-            hush.settings.remote   = true;
-	    hush.settings.hushLocal    = true;
-	    hush.settings.teleport = true;
+            hush.settings.remote    = true;
+	    hush.settings.hushLocal = true;
+	    hush.settings.teleport  = true;
+	    hush.settings.synth     = true;
             update_settings();
             return;
         end
@@ -343,6 +374,13 @@ ashita.events.register('command', 'command_cb', function (e)
             update_settings();
             return;
         end
+	
+         -- Handle: /hush synth - Hushes others' synthesis results.
+        if (#args == 2 and args[2]:any('synth')) then
+            hush.settings.synth = true;
+            update_settings();
+            return;
+        end
 
     end
 
@@ -350,9 +388,10 @@ ashita.events.register('command', 'command_cb', function (e)
 
          -- Handle: /unhush all - Unhushes all yells and teleport shouts.
         if (#args == 2 and args[2]:any('all')) then
-            hush.settings.remote   = false;
-	    hush.settings.hushLocal    = false;
-	    hush.settings.teleport = false;
+            hush.settings.remote    = false;
+	    hush.settings.hushLocal = false;
+	    hush.settings.teleport  = false;
+	    hush.settings.synth     = false;
             update_settings();
             return;
         end
@@ -374,6 +413,13 @@ ashita.events.register('command', 'command_cb', function (e)
          -- Handle: /unhush teleport - Unhushes teleport yells and shouts.
         if (#args == 2 and args[2]:any('teleport', 'teleports')) then
             hush.settings.teleport = false;
+            update_settings();
+            return;
+        end
+	
+         -- Handle: /unhush synth - Unhushes others' synthesis results.
+        if (#args == 2 and args[2]:any('synth')) then
+            hush.settings.synth = false;
             update_settings();
             return;
         end
@@ -409,6 +455,14 @@ ashita.events.register('text_in', 'text_in_cb', function (e)
 
 	-- Hush local /yells..
         if (hush.settings.hushLocal == true and is_local(e)) then
+            e.blocked = true;
+            return;
+	end
+    end
+
+    -- Hush others' synthesis results..
+    if (cm == 121 and hush.settings.synth == true) then
+        if(is_synth(e)) then
             e.blocked = true;
             return;
 	end
