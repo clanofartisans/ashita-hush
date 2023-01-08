@@ -12,3 +12,8 @@ Create a folder called "hush" in your addons folder (e.g. `X:\HorizonXI\HorizonX
 * `/unhush local`: Unhushes local /yells.
 * `/unhush teleport`: Unhushes teleport /shouts and /yells.
 * `/unhush synth`: Unhushes others' synthesis results.
+
+## Approved for HorizonXI
+In case there was any question, this addon *****is approved***** for use on HorizonXI.
+
+<img src="https://cdn.discordapp.com/attachments/890011213172461608/1061071310941327431/Screenshot_20230106-175742.png" alt="HorizonXI Discord approval message from Kipling" width="400"/>
