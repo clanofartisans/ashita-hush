@@ -21,12 +21,13 @@
 
 addon.name      = 'hush';
 addon.author    = 'Hugin';
-addon.version   = '1.1';
-addon.desc      = 'Hides yells and teleport requests.';
+addon.version   = '1.2';
+addon.desc      = 'Hides yells, teleport requests, and other annoying messages.';
 addon.link      = 'https://github.com/clanofartisans/ashita-hush';
 
 require('common');
 local chat = require('chat');
+local imgui = require('imgui');
 local settings = require('settings');
 local memMgr = AshitaCore:GetMemoryManager();
 local partyMgr = memMgr:GetParty();
@@ -36,7 +37,8 @@ local default_settings = T{
     remote    = false,
     hushLocal = false,
     teleport  = false,
-    synth     = false
+    synth     = false,
+    fish     = false
 };
 
 -- Hush Variables
@@ -45,26 +47,26 @@ local hush = T{
         '[BastokMark]: ',
         '[BastokMine]: ',
         '[Metalworks]: ',
-        '[PortBastok]: ',
+        '[PortBastok]: '
     },
     jeuno = T{
         '[LowJeuno]: ',
         '[PortJeuno]: ',
         '[RuLudeGard]: ',
-        '[UpJeuno]: ',
+        '[UpJeuno]: '
     },
     sandy = T{
         '[ChatdOrag]: ',
         '[NSandOria]: ',
         '[PSandOria]: ',
-        '[SSandOria]: ',
+        '[SSandOria]: '
     },
     windurst = T{
-	'[HeavenTowr]: ',
+        '[HeavenTowr]: ',
         '[PortWind]: ',
         '[WindWalls]: ',
         '[WindWaters]: ',
-        '[WindWoods]: ',
+        '[WindWoods]: '
     },
     teleports = T{
         '{Teleport-Altep}',
@@ -74,7 +76,8 @@ local hush = T{
         '{Teleport-Yhoat}',
         '{Teleport-Vahzl}'
     },
-    settings = settings.load(default_settings)
+    settings = settings.load(default_settings),
+	guiOpen = { false }
 };
 
 --[[
@@ -94,6 +97,22 @@ local function clean_str(str)
     return str;
 end
 
+--[[
+* Tests if the current message contains the local player's name.
+*
+* @param e - The chat event?
+* @return {bool} True if the message contains the player's name, otherwise false.
+--]]
+local function contains_name(e)
+    local name = AshitaCore:GetMemoryManager():GetParty():GetMemberName(0);
+    return name ~= nil and e.message_modified:lower():contains(name:lower());
+end
+
+--[[
+* Returns the ID for the player's current zone.
+*
+* @return {int} The current zone ID.
+--]]
 local function get_zone()
     local zoneId = partyMgr:GetMemberZone(0);
     if zoneId then
@@ -101,6 +120,32 @@ local function get_zone()
     end
 end
 
+--[[
+* Determines if the message is another player's fishing result.
+*
+* @param e - The chat event?
+* @return {bool} True if the message is another player's fishing results, otherwise false.
+--]]
+local function is_fish(e)
+    local msg = clean_str(e.message_modified);
+    local k = false;
+
+    -- Find others' fishing results..
+    k = (msg:contains(' caught ') and not contains_name(e) and not msg:contains('Something'));
+
+    if (k) then
+        return true;
+    end
+
+    return false;
+end
+
+--[[
+* Determines if the a message is "local" or not.
+*
+* @param e - The chat event?
+* @return {bool} True if local, otherwise false.
+--]]
 local function is_local(e)
     local zone = get_zone();
     local msg = clean_str(e.message_modified);
@@ -173,6 +218,12 @@ local function is_local(e)
         -- Find a matching Rabao entry..
         k = (msg:contains('[Rabao]: '));
     end
+	
+	-- Local is Tavnazian Safehold..
+    if (zone == 26) then
+        -- Find a matching TavSafehld entry..
+        k = (msg:contains('[TavSafehld]: '));
+    end
 
     if (k ~= nil) then
         return true;
@@ -181,6 +232,12 @@ local function is_local(e)
     return false;
 end
 
+--[[
+* Determines if the message is another player's synthesis result.
+*
+* @param e - The chat event?
+* @return {bool} True if someone else's result, otherwise false.
+]]--
 local function is_synth(e)
     local msg = clean_str(e.message_modified);
     local k = false;
@@ -202,6 +259,12 @@ local function is_synth(e)
     return false;
 end
 
+--[[
+* Determines if the message is a teleport request or advertisement.
+*
+* @param e - The chat event?
+* @return {bool} True if it's teleport related, otherwise false.
+--]]
 local function is_teleport(e)
     local msg = clean_str(e.message_modified);
     local k = false;
@@ -236,58 +299,14 @@ local function print_help(isError)
     end
 
     local cmds = T{
+        { '/hush', "Displays the addon's configuration window." },
         { '/hush help', "Displays the addon's help information." },
-	{ '/hush status', "Displays the current hush statuses." },
-        { '/hush remote', 'Hushes remote /yells.' },
-        { '/hush local', 'Hushes local /yells.' },
-        { '/hush teleport', 'Hushes teleport /shouts and /yells.' },
-        { '/hush synth', "Hushes others' synthesis results." },
-        { '/unhush remote', 'Unhushes remote /yells.' },
-        { '/unhush local', 'Unhushes local /yells.' },
-        { '/unhush teleport', 'Unhushes teleport /shouts and /yells.' },
-        { '/unhush synth', "Unhushes others' synthesis results" },
     };
 
     -- Print the command list..
     cmds:ieach(function (v)
         print(chat.header(addon.name):append(chat.error('Usage: ')):append(chat.message(v[1]):append(' - ')):append(chat.color1(6, v[2])));
     end);
-end
-
---[[
-* Prints the current hush status.
---]]
-local function print_status()
-    -- Print the help header..
-    if (isError) then
-        print(chat.header(addon.name):append(chat.error('Invalid command syntax for command: ')):append(chat.success('/' .. addon.name)));
-    else
-        print(chat.header(addon.name):append(chat.message('Current Hush status:')));
-    end
-
-    if (hush.settings.remote) then
-        print(chat.header(addon.name):append(chat.message('Remote /yells: '):append(chat.color1(6, 'Hushed'))));
-    else
-        print(chat.header(addon.name):append(chat.message('Remote /yells: '):append(chat.color1(6, 'Unhushed'))));
-    end
-
-    if (hush.settings.hushLocal) then
-        print(chat.header(addon.name):append(chat.message('Local /yells: '):append(chat.color1(6, 'Hushed'))));
-    else
-        print(chat.header(addon.name):append(chat.message('Local /yells: '):append(chat.color1(6, 'Unhushed'))));
-    end
-
-    if (hush.settings.teleport) then
-        print(chat.header(addon.name):append(chat.message('Teleports: '):append(chat.color1(6, 'Hushed'))));
-    else
-        print(chat.header(addon.name):append(chat.message('Teleports: '):append(chat.color1(6, 'Unhushed'))));
-    end
-
-    if (hush.settings.synth) then
-        print(chat.header(addon.name):append(chat.message('Synths: '):append(chat.color1(6, 'Hushed'))));
-    else
-        print(chat.header(addon.name):append(chat.message('Synths: '):append(chat.color1(6, 'Unhushed'))));
-    end
 end
 
 --[[
@@ -311,13 +330,45 @@ end
 settings.register('settings', 'settings_update', update_settings);
 
 --[[
+* event: d3d_present
+* desc : Event called when the addon opens the configuration GUI.
+--]]
+ashita.events.register('d3d_present', 'd3d_present_cb', function ()
+    if (not hush.guiOpen[1]) then return end
+    
+    if (imgui.Begin('Hush Settings##HushSettingsWindow', hush.guiOpen, ImGuiWindowFlags_AlwaysAutoResize)) then
+        if imgui.Checkbox('Hush remote /yells##HushRemoteCheck', { hush.settings.remote }) then
+            hush.settings.remote = not hush.settings.remote;
+            update_settings();
+        end
+        if imgui.Checkbox('Hush local /yells##HushLocalCheck', { hush.settings.hushLocal }) then
+            hush.settings.hushLocal = not hush.settings.hushLocal;
+            update_settings();
+        end
+        if imgui.Checkbox('Hush teleport shouts/yells##HushTeleportCheck', { hush.settings.teleport }) then
+            hush.settings.teleport = not hush.settings.teleport;
+            update_settings();
+        end
+        if imgui.Checkbox('Hush others\' synthesis results##HushSynthCheck', { hush.settings.synth }) then
+            hush.settings.synth = not hush.settings.synth;
+            update_settings();
+        end
+        if imgui.Checkbox('Hush others\' fishing results##HushFishCheck', { hush.settings.fish }) then
+            hush.settings.fish = not hush.settings.fish;
+            update_settings();
+        end
+        imgui.End();
+    end
+end);
+
+--[[
 * event: command
 * desc : Event called when the addon is processing a command.
 --]]
 ashita.events.register('command', 'command_cb', function (e)
     -- Parse the command arguments..
     local args = e.command:args();
-    if (#args == 0 or (args[1] ~= '/hush' and args[1] ~= '/unhush')) then
+    if (#args == 0 or (args[1] ~= '/hush')) then
         return;
     end
 
@@ -326,7 +377,8 @@ ashita.events.register('command', 'command_cb', function (e)
 
     -- Handle: /hush - Shows the addon help.
     if (#args == 1) then
-        print_help(false);
+        --print_help(false);
+        hush.guiOpen[1] = (not hush.guiOpen[1]);
         return;
     end
 
@@ -334,96 +386,6 @@ ashita.events.register('command', 'command_cb', function (e)
     if (#args == 2 and args[2]:any('help')) then
         print_help(false);
         return;
-    end
-
-    -- Handle: /hush status - Shows the current hush status.
-    if (#args == 2 and args[2]:any('status')) then
-        print_status();
-        return;
-    end
-
-    if (#args == 2 and args[1] == '/hush') then
-
-         -- Handle: /hush all - Hushes all yells and teleport shouts.
-        if (#args == 2 and args[2]:any('all')) then
-            hush.settings.remote    = true;
-	    hush.settings.hushLocal = true;
-	    hush.settings.teleport  = true;
-	    hush.settings.synth     = true;
-            update_settings();
-            return;
-        end
-	
-         -- Handle: /hush remote - Hushes non-local yells.
-        if (#args == 2 and args[2]:any('remote')) then
-            hush.settings.remote = true;
-            update_settings();
-            return;
-        end
-	
-         -- Handle: /hush local - Hushes local yells.
-        if (#args == 2 and args[2]:any('local')) then
-            hush.settings.hushLocal = true;
-            update_settings();
-            return;
-        end
-	
-         -- Handle: /hush teleport - Hushes teleport yells and shouts.
-        if (#args == 2 and args[2]:any('teleport', 'teleports')) then
-            hush.settings.teleport = true;
-            update_settings();
-            return;
-        end
-	
-         -- Handle: /hush synth - Hushes others' synthesis results.
-        if (#args == 2 and args[2]:any('synth')) then
-            hush.settings.synth = true;
-            update_settings();
-            return;
-        end
-
-    end
-
-    if (#args == 2 and args[1] == '/unhush') then
-
-         -- Handle: /unhush all - Unhushes all yells and teleport shouts.
-        if (#args == 2 and args[2]:any('all')) then
-            hush.settings.remote    = false;
-	    hush.settings.hushLocal = false;
-	    hush.settings.teleport  = false;
-	    hush.settings.synth     = false;
-            update_settings();
-            return;
-        end
-	
-         -- Handle: /unhush remote - Unhushes non-local yells.
-        if (#args == 2 and args[2]:any('remote')) then
-            hush.settings.remote = false;
-            update_settings();
-            return;
-        end
-	
-         -- Handle: /unhush local - Unhushes local yells.
-        if (#args == 2 and args[2]:any('local')) then
-            hush.settings.hushLocal = false;
-            update_settings();
-            return;
-        end
-	
-         -- Handle: /unhush teleport - Unhushes teleport yells and shouts.
-        if (#args == 2 and args[2]:any('teleport', 'teleports')) then
-            hush.settings.teleport = false;
-            update_settings();
-            return;
-        end
-	
-         -- Handle: /unhush synth - Unhushes others' synthesis results.
-        if (#args == 2 and args[2]:any('synth')) then
-            hush.settings.synth = false;
-            update_settings();
-            return;
-        end
-
     end
 
     -- Unhandled: Print help information..
@@ -442,22 +404,22 @@ ashita.events.register('text_in', 'text_in_cb', function (e)
         if(is_teleport(e)) then
             e.blocked = true;
             return;
-	end
+        end
     end
 
     -- Hush /yelled messages..
     if (cm == 11) then
         -- Hush remote /yells..
-	if (hush.settings.remote == true and not is_local(e)) then
+        if (hush.settings.remote == true and not is_local(e)) then
             e.blocked = true;
             return;
-	end
+        end
 
-	-- Hush local /yells..
+        -- Hush local /yells..
         if (hush.settings.hushLocal == true and is_local(e)) then
             e.blocked = true;
             return;
-	end
+        end
     end
 
     -- Hush others' synthesis results..
@@ -465,7 +427,15 @@ ashita.events.register('text_in', 'text_in_cb', function (e)
         if(is_synth(e)) then
             e.blocked = true;
             return;
-	end
+        end
+    end
+
+    -- Hush others' fishing results..
+    if (cm == 142 and hush.settings.fish == true) then
+        if(is_fish(e)) then
+            e.blocked = true;
+            return;
+        end
     end
 
     return;
