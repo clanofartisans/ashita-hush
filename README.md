@@ -3,3 +3,6 @@ Install to your addons folder (e.g. `X:\HorizonXI\HorizonXI\Game\addons\hush\hus
 
 ## Usage
 * `/hush`: Opens a GUI with options for filtering certain messages.
+
+## Preview
+![Hush Settings Preview](https://github.com/clanofartisans/ashita-hush/raw/main/settings.png)
