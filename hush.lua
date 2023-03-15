@@ -21,7 +21,7 @@
 
 addon.name      = 'hush';
 addon.author    = 'Hugin';
-addon.version   = '1.2';
+addon.version   = '1.3';
 addon.desc      = 'Hides yells, teleport requests, and other annoying messages.';
 addon.link      = 'https://github.com/clanofartisans/ashita-hush';
 
@@ -38,7 +38,10 @@ local default_settings = T{
     hushLocal = false,
     teleport  = false,
     synth     = false,
-    fish     = false
+    fish      = false,
+    allshouts = false,
+    defeats   = false,
+    cmderror  = false
 };
 
 -- Hush Variables
@@ -118,6 +121,46 @@ local function get_zone()
     if zoneId then
         return zoneId;
     end
+end
+
+--[[
+* Determines if the message is part of a "command error".
+*
+* @param e - The chat event?
+* @return {bool} True if the message is part of a "command error", otherwise false.
+--]]
+local function is_cmd_error(e)
+    local msg = clean_str(e.message_modified);
+    local k = false;
+
+    -- Find command errors..
+    k = (msg:contains('A command error occurred') or msg:contains('>> '));
+
+    if (k) then
+        return true;
+    end
+
+    return false;
+end
+
+--[[
+* Determines if the message is another player's defeated enemy.
+*
+* @param e - The chat event?
+* @return {bool} True if the message is another player's defeated enemy, otherwise false.
+--]]
+local function is_defeats(e)
+    local msg = clean_str(e.message_modified);
+    local k = false;
+
+    -- Find others' defeated enemies..
+    k = msg:contains(' defeats ');
+
+    if (k) then
+        return true;
+    end
+
+    return false;
 end
 
 --[[
@@ -349,12 +392,24 @@ ashita.events.register('d3d_present', 'd3d_present_cb', function ()
             hush.settings.teleport = not hush.settings.teleport;
             update_settings();
         end
+        if imgui.Checkbox('Hush all shouts##HushAllShoutsCheck', { hush.settings.allshouts }) then
+            hush.settings.allshouts = not hush.settings.allshouts;
+            update_settings();
+        end
         if imgui.Checkbox('Hush others\' synthesis results##HushSynthCheck', { hush.settings.synth }) then
             hush.settings.synth = not hush.settings.synth;
             update_settings();
         end
         if imgui.Checkbox('Hush others\' fishing results##HushFishCheck', { hush.settings.fish }) then
             hush.settings.fish = not hush.settings.fish;
+            update_settings();
+        end
+        if imgui.Checkbox('Hush others\' defeated enemies##HushDefeatsCheck', { hush.settings.defeats }) then
+            hush.settings.defeats = not hush.settings.defeats;
+            update_settings();
+        end
+        if imgui.Checkbox('Hush "command errors" (experimental)##HushDefeatsCheck', { hush.settings.cmderror }) then
+            hush.settings.cmderror = not hush.settings.cmderror;
             update_settings();
         end
         imgui.End();
@@ -399,6 +454,12 @@ end);
 ashita.events.register('text_in', 'text_in_cb', function (e)
     local cm = bit.band(e.mode,  0x000000FF);
 
+    -- Hush all shouts..
+    if (cm == 10 and hush.settings.allshouts == true) then
+        e.blocked = true;
+        return;
+    end
+
     -- Hush /shouted teleports..
     if ((cm == 10 or cm == 11) and hush.settings.teleport == true) then
         if(is_teleport(e)) then
@@ -436,6 +497,22 @@ ashita.events.register('text_in', 'text_in_cb', function (e)
             e.blocked = true;
             return;
         end
+    end
+
+    -- Hush others' defeated enemies..
+    if (cm == 44 and hush.settings.defeats == true) then
+        if(is_defeats(e)) then
+            e.blocked = true;
+	    return;
+	end
+    end
+
+    -- Hush command errors..
+    if (cm == 157 and hush.settings.cmderror == true) then
+        if(is_cmd_error(e)) then
+            e.blocked = true;
+	    return;
+	end
     end
 
     return;
