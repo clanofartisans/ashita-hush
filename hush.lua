@@ -21,8 +21,8 @@
 
 addon.name      = 'hush';
 addon.author    = 'Hugin';
-addon.version   = '1.3';
-addon.desc      = 'Hides yells, teleport requests, and other annoying messages.';
+addon.version   = '1.4';
+addon.desc      = 'Hides yells, teleport requests, Eco-Warrior, and other annoying messages.';
 addon.link      = 'https://github.com/clanofartisans/ashita-hush';
 
 require('common');
@@ -37,6 +37,7 @@ local default_settings = T{
     remote    = false,
     hushLocal = false,
     teleport  = false,
+    ecowarrior  = false,
     synth     = false,
     fish      = false,
     allshouts = false,
@@ -329,6 +330,26 @@ local function is_teleport(e)
 end
 
 --[[
+* Determines if the message is a Eco-Warrior request or advertisement.
+*
+* @param e - The chat event?
+* @return {bool} True if it's Eco-Warrior related, otherwise false.
+--]]
+local function is_ecowarrior(e)
+    local msg = clean_str(e.message_modified);
+    local k = false;
+
+    -- Find the word "eco"..
+    k = ((e.message_modified:lower():contains('eco')) and not contains_name(e));
+
+    if (k) then
+        return true;
+    end
+
+    return false;
+end
+
+--[[
 * Prints the addon help information.
 *
 * @param {boolean} isError - Flag if this function was invoked due to an error.
@@ -390,6 +411,10 @@ ashita.events.register('d3d_present', 'd3d_present_cb', function ()
         end
         if imgui.Checkbox('Hush teleport shouts/yells##HushTeleportCheck', { hush.settings.teleport }) then
             hush.settings.teleport = not hush.settings.teleport;
+            update_settings();
+        end
+        if imgui.Checkbox('Hush Eco-Warrior shouts/yells##HushEcoWarriorCheck', { hush.settings.ecowarrior }) then
+            hush.settings.ecowarrior = not hush.settings.ecowarrior;
             update_settings();
         end
         if imgui.Checkbox('Hush all shouts##HushAllShoutsCheck', { hush.settings.allshouts }) then
@@ -463,6 +488,14 @@ ashita.events.register('text_in', 'text_in_cb', function (e)
     -- Hush /shouted teleports..
     if ((cm == 10 or cm == 11) and hush.settings.teleport == true) then
         if(is_teleport(e)) then
+            e.blocked = true;
+            return;
+        end
+    end
+
+    -- Hush Eco-Warrior..
+    if ((cm == 10 or cm == 11) and hush.settings.ecowarrior == true) then
+        if(is_ecowarrior(e)) then
             e.blocked = true;
             return;
         end
