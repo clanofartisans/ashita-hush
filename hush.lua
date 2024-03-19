@@ -21,7 +21,7 @@
 
 addon.name      = 'hush';
 addon.author    = 'Hugin';
-addon.version   = '1.4';
+addon.version   = '1.5';
 addon.desc      = 'Hides yells, teleport requests, Eco-Warrior, and other annoying messages.';
 addon.link      = 'https://github.com/clanofartisans/ashita-hush';
 
@@ -34,15 +34,16 @@ local partyMgr = memMgr:GetParty();
 
 -- Default Settings
 local default_settings = T{
-    remote    = false,
-    hushLocal = false,
-    teleport  = false,
-    ecowarrior  = false,
-    synth     = false,
-    fish      = false,
-    allshouts = false,
-    defeats   = false,
-    cmderror  = false
+    remote     = false,
+    hushLocal  = false,
+    teleport   = false,
+    ecowarrior = false,
+	highwind   = false,
+    synth      = false,
+    fish       = false,
+    allshouts  = false,
+    defeats    = false,
+    cmderror   = false
 };
 
 -- Hush Variables
@@ -350,6 +351,26 @@ local function is_ecowarrior(e)
 end
 
 --[[
+* Determines if the message is a Highwind shout.
+*
+* @param e - The chat event?
+* @return {bool} True if it's Highwind related, otherwise false.
+--]]
+local function is_highwind(e)
+    local msg = clean_str(e.message_modified);
+    local k = false;
+
+    -- Find the word "highwind", hopefully including if it's misspelled..
+    k = ((e.message_modified:lower():match('hi.*wind')) and not contains_name(e));
+
+    if (k) then
+        return true;
+    end
+
+    return false;
+end
+
+--[[
 * Prints the addon help information.
 *
 * @param {boolean} isError - Flag if this function was invoked due to an error.
@@ -415,6 +436,10 @@ ashita.events.register('d3d_present', 'd3d_present_cb', function ()
         end
         if imgui.Checkbox('Hush Eco-Warrior shouts/yells##HushEcoWarriorCheck', { hush.settings.ecowarrior }) then
             hush.settings.ecowarrior = not hush.settings.ecowarrior;
+            update_settings();
+        end
+        if imgui.Checkbox('Hush Highwind shouts/yells##HushHighwindCheck', { hush.settings.highwind }) then
+            hush.settings.highwind = not hush.settings.highwind;
             update_settings();
         end
         if imgui.Checkbox('Hush all shouts##HushAllShoutsCheck', { hush.settings.allshouts }) then
@@ -501,6 +526,14 @@ ashita.events.register('text_in', 'text_in_cb', function (e)
         end
     end
 
+    -- Hush Highwind..
+    if ((cm == 10 or cm == 11) and hush.settings.highwind == true) then
+        if(is_highwind(e)) then
+            e.blocked = true;
+            return;
+        end
+    end
+
     -- Hush /yelled messages..
     if (cm == 11) then
         -- Hush remote /yells..
@@ -536,16 +569,16 @@ ashita.events.register('text_in', 'text_in_cb', function (e)
     if (cm == 44 and hush.settings.defeats == true) then
         if(is_defeats(e)) then
             e.blocked = true;
-	    return;
-	end
+			return;
+		end
     end
 
     -- Hush command errors..
     if (cm == 157 and hush.settings.cmderror == true) then
         if(is_cmd_error(e)) then
             e.blocked = true;
-	    return;
-	end
+			return;
+		end
     end
 
     return;
