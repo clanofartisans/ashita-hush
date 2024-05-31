@@ -21,7 +21,7 @@
 
 addon.name      = 'hush';
 addon.author    = 'Hugin';
-addon.version   = '1.5';
+addon.version   = '1.5.1';
 addon.desc      = 'Hides yells, teleport requests, Eco-Warrior, and other annoying messages.';
 addon.link      = 'https://github.com/clanofartisans/ashita-hush';
 
@@ -361,7 +361,7 @@ local function is_highwind(e)
     local k = false;
 
     -- Find the word "highwind", hopefully including if it's misspelled..
-    k = ((e.message_modified:lower():match('hi.*wind')) and not contains_name(e));
+    k = ((e.message_modified:lower():match('hi.*wind') or e.message_modified:lower():match(' hw')) and not contains_name(e));
 
     if (k) then
         return true;
