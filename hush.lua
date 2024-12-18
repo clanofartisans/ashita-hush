@@ -21,7 +21,7 @@
 
 addon.name      = 'hush';
 addon.author    = 'Hugin';
-addon.version   = '1.5.1';
+addon.version   = '1.5.2';
 addon.desc      = 'Hides yells, teleport requests, Eco-Warrior, and other annoying messages.';
 addon.link      = 'https://github.com/clanofartisans/ashita-hush';
 
@@ -43,7 +43,8 @@ local default_settings = T{
     fish       = false,
     allshouts  = false,
     defeats    = false,
-    cmderror   = false
+    cmderror   = false,
+	merrymaker = false
 };
 
 -- Hush Variables
@@ -371,6 +372,26 @@ local function is_highwind(e)
 end
 
 --[[
+* Determines if the message is a Goblin Merrymaker.
+*
+* @param e - The chat event?
+* @return {bool} True if it's a Goblin Merrymaker, otherwise false.
+--]]
+local function is_merrymaker(e)
+    local msg = clean_str(e.message_modified);
+    local k = false;
+
+    -- Find the NPC name..
+    k = (e.message_modified:contains('Goblin Merrymaker'));
+
+    if (k) then
+        return true;
+    end
+
+    return false;
+end
+
+--[[
 * Prints the addon help information.
 *
 * @param {boolean} isError - Flag if this function was invoked due to an error.
@@ -458,7 +479,11 @@ ashita.events.register('d3d_present', 'd3d_present_cb', function ()
             hush.settings.defeats = not hush.settings.defeats;
             update_settings();
         end
-        if imgui.Checkbox('Hush "command errors" (experimental)##HushDefeatsCheck', { hush.settings.cmderror }) then
+        if imgui.Checkbox('Hush Goblin Merrymakers##HushMerrymakerCheck', { hush.settings.merrymaker }) then
+            hush.settings.merrymaker = not hush.settings.merrymaker;
+            update_settings();
+        end
+        if imgui.Checkbox('Hush "command errors" (experimental)##HushCmdErrCheck', { hush.settings.cmderror }) then
             hush.settings.cmderror = not hush.settings.cmderror;
             update_settings();
         end
@@ -568,6 +593,14 @@ ashita.events.register('text_in', 'text_in_cb', function (e)
     -- Hush others' defeated enemies..
     if (cm == 44 and hush.settings.defeats == true) then
         if(is_defeats(e)) then
+            e.blocked = true;
+			return;
+		end
+    end
+
+    -- Hush Goblin Merrymakers..
+    if (cm == 142 and hush.settings.merrymaker == true) then
+        if(is_merrymaker(e)) then
             e.blocked = true;
 			return;
 		end
