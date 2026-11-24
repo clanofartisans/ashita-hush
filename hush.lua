@@ -21,7 +21,7 @@
 
 addon.name      = 'hush';
 addon.author    = 'Hugin';
-addon.version   = '1.5.4';
+addon.version   = '1.5.5';
 addon.desc      = 'Hides yells, teleport requests, Eco-Warrior, and other annoying messages.';
 addon.link      = 'https://github.com/clanofartisans/ashita-hush';
 
@@ -49,30 +49,42 @@ local default_settings = T{
 
 -- Hush Variables
 local hush = T{
-    bastok = T{
-        '[BastokMark]: ',
-        '[BastokMine]: ',
-        '[Metalworks]: ',
-        '[PortBastok]: '
-    },
-    jeuno = T{
-        '[LowJeuno]: ',
-        '[PortJeuno]: ',
-        '[RuLudeGard]: ',
-        '[UpJeuno]: '
-    },
-    sandy = T{
-        '[ChatdOrag]: ',
-        '[NSandOria]: ',
-        '[PSandOria]: ',
-        '[SSandOria]: '
-    },
-    windurst = T{
-        '[HeavenTowr]: ',
-        '[PortWind]: ',
-        '[WindWalls]: ',
-        '[WindWaters]: ',
-        '[WindWoods]: '
+    --[[
+    * Towns whose /yells can be "local". Each entry lists the zone ids that make up the town and the
+    * tags its /yells carry (the zone's short name, as in "Name[LowJeuno]: text"). Zones that share
+    * an entry are local to each other: Selbina/Mhaura (the ferry) and Whitegate/Al Zahbi.
+    --]]
+    towns = T{
+        -- San d'Oria..
+        {
+            zones = T{ 230, 231, 232, 233 },
+            tags  = T{ '[ChatdOrag]: ', '[NSandOria]: ', '[PSandOria]: ', '[SSandOria]: ' }
+        },
+        -- Bastok..
+        {
+            zones = T{ 234, 235, 236, 237 },
+            tags  = T{ '[BastokMark]: ', '[BastokMine]: ', '[Metalworks]: ', '[PortBastok]: ' }
+        },
+        -- Windurst..
+        {
+            zones = T{ 238, 239, 240, 241, 242 },
+            tags  = T{ '[HeavenTowr]: ', '[PortWind]: ', '[WindWalls]: ', '[WindWaters]: ', '[WindWoods]: ' }
+        },
+        -- Jeuno..
+        {
+            zones = T{ 243, 244, 245, 246 },
+            tags  = T{ '[LowJeuno]: ', '[PortJeuno]: ', '[RuLudeGard]: ', '[UpJeuno]: ' }
+        },
+        -- Selbina/Mhaura..
+        { zones = T{ 248, 249 }, tags = T{ '[Mhaura]: ', '[Selbina]: ' } },
+        -- Aht Urhgan Whitegate/Al Zahbi..
+        { zones = T{ 48, 50 }, tags = T{ '[AlZahbi]: ', '[Whitegate]: ' } },
+        -- Rabao, Kazham, Norg, Tavnazian Safehold and Nashmau..
+        { zones = T{ 247 }, tags = T{ '[Rabao]: ' } },
+        { zones = T{ 250 }, tags = T{ '[Kazham]: ' } },
+        { zones = T{ 252 }, tags = T{ '[Norg]: ' } },
+        { zones = T{ 26 }, tags = T{ '[TavSafehld]: ' } },
+        { zones = T{ 53 }, tags = T{ '[Nashmau]: ' } }
     },
     teleports = T{
         '{Teleport-Altep}',
@@ -198,88 +210,20 @@ local function is_local(e)
         return false;
     end
 
+    -- Find the town the player is in; outside a known town, every /yell is remote..
+    local _, town = hush.towns:find_if(function (v)
+        return v.zones:contains(zone);
+    end);
+
+    if (town == nil) then
+        return false;
+    end
+
+    -- Local if the /yell carries one of the town's tags..
     local msg = clean_str(e.message_modified);
-    local k = false;
-
-    -- Local is Bastok..
-    if (zone >= 234 and zone <= 237) then
-        -- Find a matching Bastok entry..
-        k, _ = hush.bastok:find_if(function (v, _)
-            if (msg:contains(v)) then
-                return true;
-            end
-            return false;
-        end);
-    end
-
-    -- Local is Jeuno..
-    if (zone >= 243 and zone <= 246) then
-        -- Find a matching Jeuno entry..
-        k, _ = hush.jeuno:find_if(function (v, _)
-            if (msg:contains(v)) then
-                return true;
-            end
-            return false;
-        end);
-    end
-
-    -- Local is San d'Oria..
-    if (zone >= 230 and zone <= 233) then
-        -- Find a matching San d'Oria entry..
-        k, _ = hush.sandy:find_if(function (v, _)
-            if (msg:contains(v)) then
-                return true;
-            end
-            return false;
-        end);
-    end
-
-    -- Local is Windurst..
-    if (zone >= 238 and zone <= 242) then
-        -- Find a matching Windurst entry..
-        k, _ = hush.windurst:find_if(function (v, _)
-            if (msg:contains(v)) then
-                return true;
-            end
-            return false;
-        end);
-    end
-
-    -- Local is Mhaura/Selbina..
-    if (zone == 248 or zone == 249) then
-        -- Find a matching Mhaura/Selbina entry..
-        k = (msg:contains('[Mhaura]: ') or msg:contains('[Selbina]: '));
-    end
-
-    -- Local is Kazham..
-    if (zone == 250) then
-        -- Find a matching Kazham entry..
-        k = (msg:contains('[Kazham]: '));
-    end
-
-    -- Local is Norg..
-    if (zone == 252) then
-        -- Find a matching Norg entry..
-        k = (msg:contains('[Norg]: '));
-    end
-
-    -- Local is Rabao..
-    if (zone == 247) then
-        -- Find a matching Rabao entry..
-        k = (msg:contains('[Rabao]: '));
-    end
-	
-	-- Local is Tavnazian Safehold..
-    if (zone == 26) then
-        -- Find a matching TavSafehld entry..
-        k = (msg:contains('[TavSafehld]: '));
-    end
-
-    if (k) then
-        return true;
-    end
-
-    return false;
+    return town.tags:any(function (v)
+        return msg:contains(v);
+    end);
 end
 
 --[[
@@ -445,7 +389,7 @@ settings.register('settings', 'settings_update', update_settings);
 --]]
 ashita.events.register('d3d_present', 'd3d_present_cb', function ()
     if (not hush.guiOpen[1]) then return end
-    
+
     if (imgui.Begin('Hush Settings##HushSettingsWindow', hush.guiOpen, ImGuiWindowFlags_AlwaysAutoResize)) then
         if imgui.Checkbox('Hush remote /yells##HushRemoteCheck', { hush.settings.remote }) then
             hush.settings.remote = not hush.settings.remote;
@@ -617,6 +561,4 @@ ashita.events.register('text_in', 'text_in_cb', function (e)
 			return;
 		end
     end
-
-    return;
 end);
