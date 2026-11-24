@@ -317,17 +317,16 @@ end
 --]]
 local function is_teleport(e)
     local msg = clean_str(e.message_modified);
-    local k = false;
 
     -- Find a auto-translate teleports..
-    k, _ = hush.teleports:find_if(function (v, _)
+    local k, _ = hush.teleports:find_if(function (v, _)
         if (msg:contains(v)) then
             return true;
         end
         return false;
     end);
 
-    if (k ~= nil) then
+    if (k) then
         return true;
     end
 
