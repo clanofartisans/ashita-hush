@@ -21,7 +21,7 @@
 
 addon.name      = 'hush';
 addon.author    = 'Hugin';
-addon.version   = '1.5.5';
+addon.version   = '1.5.6';
 addon.desc      = 'Hides yells, teleport requests, Eco-Warrior, and other annoying messages.';
 addon.link      = 'https://github.com/clanofartisans/ashita-hush';
 
@@ -196,6 +196,35 @@ local function is_fish(e)
     end
 
     return false;
+end
+
+--[[
+* Determines if the message was sent by a GM. Only the sender is checked (the text before the first
+* ": ", as in "[GM]Name : text"), and player names are letters only, so a player can't pass for a
+* GM by typing "[GM]" into their message.
+*
+* @param e - The chat event?
+* @return {bool} True if a GM sent the message, otherwise false.
+--]]
+local function is_gm(e)
+    local msg = clean_str(e.message_modified);
+    local sender = msg:match('^(.-) ?: ');
+
+    return (sender ~= nil and sender:contains('[GM]'));
+end
+
+--[[
+* Determines if the message is HorizonXI's announcement that a hardcore adventurer has died:
+* "Name has fallen as a hardcore adventurer. While playing as: ...". It has no " : " sender, which
+* every player's shout does, so a player can't pass for one by shouting the same words.
+*
+* @param e - The chat event?
+* @return {bool} True if it's a hardcore-death announcement, otherwise false.
+--]]
+local function is_hardcore_death(e)
+    local msg = clean_str(e.message_modified);
+
+    return (msg:contains(' has fallen as a hardcore adventurer.') and not msg:contains(' : '));
 end
 
 --[[
@@ -476,6 +505,16 @@ end);
 --]]
 ashita.events.register('text_in', 'text_in_cb', function (e)
     local cm = bit.band(e.mode,  0x000000FF);
+
+    -- Never hush a GM's shouts or /yells..
+    if ((cm == 10 or cm == 11) and is_gm(e)) then
+        return;
+    end
+
+    -- Never hush a hardcore-death announcement..
+    if (cm == 10 and is_hardcore_death(e)) then
+        return;
+    end
 
     -- Hush all shouts..
     if (cm == 10 and hush.settings.allshouts == true) then
