@@ -21,7 +21,7 @@
 
 addon.name      = 'hush';
 addon.author    = 'Hugin';
-addon.version   = '1.5.2';
+addon.version   = '1.5.3';
 addon.desc      = 'Hides yells, teleport requests, Eco-Warrior, and other annoying messages.';
 addon.link      = 'https://github.com/clanofartisans/ashita-hush';
 
@@ -194,6 +194,10 @@ end
 --]]
 local function is_local(e)
     local zone = get_zone();
+    if (zone == nil) then
+        return false;
+    end
+
     local msg = clean_str(e.message_modified);
     local k = false;
 
@@ -271,7 +275,7 @@ local function is_local(e)
         k = (msg:contains('[TavSafehld]: '));
     end
 
-    if (k ~= nil) then
+    if (k) then
         return true;
     end
 
