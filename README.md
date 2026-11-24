@@ -6,6 +6,8 @@ Install to your addons folder (e.g. `.\HorizonXI\Game\addons\hush\hush.lua`).
 ## Usage
 * `/hush`: Opens a GUI with options for filtering certain messages.
 
+GM shouts and yells, and HorizonXI's hardcore-death announcements, are never hushed, even with "Hush all shouts" turned on.
+
 ## Preview
 ![Hush Settings Preview](https://github.com/clanofartisans/ashita-hush/raw/main/settings.png)
 

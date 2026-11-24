@@ -29,8 +29,7 @@ require('common');
 local chat = require('chat');
 local imgui = require('imgui');
 local settings = require('settings');
-local memMgr = AshitaCore:GetMemoryManager();
-local partyMgr = memMgr:GetParty();
+local partyMgr = AshitaCore:GetMemoryManager():GetParty();
 
 -- Default Settings
 local default_settings = T{
@@ -38,13 +37,13 @@ local default_settings = T{
     hushLocal  = false,
     teleport   = false,
     ecowarrior = false,
-	highwind   = false,
+    highwind   = false,
     synth      = false,
     fish       = false,
     allshouts  = false,
     defeats    = false,
     cmderror   = false,
-	merrymaker = false
+    merrymaker = false
 };
 
 -- Hush Variables
@@ -95,7 +94,7 @@ local hush = T{
         '{Teleport-Vahzl}'
     },
     settings = settings.load(default_settings),
-	guiOpen = { false }
+    guiOpen = { false }
 };
 
 --[[
@@ -118,11 +117,11 @@ end
 --[[
 * Tests if the current message contains the local player's name.
 *
-* @param e - The chat event?
+* @param {table} e - The text_in event.
 * @return {bool} True if the message contains the player's name, otherwise false.
 --]]
 local function contains_name(e)
-    local name = AshitaCore:GetMemoryManager():GetParty():GetMemberName(0);
+    local name = partyMgr:GetMemberName(0);
     return name ~= nil and e.message_modified:lower():contains(name:lower());
 end
 
@@ -132,70 +131,46 @@ end
 * @return {int} The current zone ID.
 --]]
 local function get_zone()
-    local zoneId = partyMgr:GetMemberZone(0);
-    if zoneId then
-        return zoneId;
-    end
+    return partyMgr:GetMemberZone(0);
 end
 
 --[[
 * Determines if the message is part of a "command error".
 *
-* @param e - The chat event?
+* @param {table} e - The text_in event.
 * @return {bool} True if the message is part of a "command error", otherwise false.
 --]]
 local function is_cmd_error(e)
     local msg = clean_str(e.message_modified);
-    local k = false;
 
     -- Find command errors..
-    k = (msg:contains('A command error occurred') or msg:contains('>> '));
-
-    if (k) then
-        return true;
-    end
-
-    return false;
+    return (msg:contains('A command error occurred') or msg:contains('>> '));
 end
 
 --[[
 * Determines if the message is another player's defeated enemy.
 *
-* @param e - The chat event?
+* @param {table} e - The text_in event.
 * @return {bool} True if the message is another player's defeated enemy, otherwise false.
 --]]
 local function is_defeats(e)
     local msg = clean_str(e.message_modified);
-    local k = false;
 
     -- Find others' defeated enemies..
-    k = msg:contains(' defeats ');
-
-    if (k) then
-        return true;
-    end
-
-    return false;
+    return msg:contains(' defeats ');
 end
 
 --[[
 * Determines if the message is another player's fishing result.
 *
-* @param e - The chat event?
+* @param {table} e - The text_in event.
 * @return {bool} True if the message is another player's fishing results, otherwise false.
 --]]
 local function is_fish(e)
     local msg = clean_str(e.message_modified);
-    local k = false;
 
     -- Find others' fishing results..
-    k = (msg:contains(' caught ') and not contains_name(e) and not msg:contains('Something'));
-
-    if (k) then
-        return true;
-    end
-
-    return false;
+    return (msg:contains(' caught ') and not contains_name(e) and not msg:contains('Something'));
 end
 
 --[[
@@ -203,7 +178,7 @@ end
 * ": ", as in "[GM]Name : text"), and player names are letters only, so a player can't pass for a
 * GM by typing "[GM]" into their message.
 *
-* @param e - The chat event?
+* @param {table} e - The text_in event.
 * @return {bool} True if a GM sent the message, otherwise false.
 --]]
 local function is_gm(e)
@@ -218,7 +193,7 @@ end
 * "Name has fallen as a hardcore adventurer. While playing as: ...". It has no " : " sender, which
 * every player's shout does, so a player can't pass for one by shouting the same words.
 *
-* @param e - The chat event?
+* @param {table} e - The text_in event.
 * @return {bool} True if it's a hardcore-death announcement, otherwise false.
 --]]
 local function is_hardcore_death(e)
@@ -228,9 +203,9 @@ local function is_hardcore_death(e)
 end
 
 --[[
-* Determines if the a message is "local" or not.
+* Determines if a message is "local" or not.
 *
-* @param e - The chat event?
+* @param {table} e - The text_in event.
 * @return {bool} True if local, otherwise false.
 --]]
 local function is_local(e)
@@ -258,114 +233,71 @@ end
 --[[
 * Determines if the message is another player's synthesis result.
 *
-* @param e - The chat event?
+* @param {table} e - The text_in event.
 * @return {bool} True if someone else's result, otherwise false.
-]]--
+--]]
 local function is_synth(e)
     local msg = clean_str(e.message_modified);
-    local k = false;
 
-    -- Find successful synthesis..
-    k = (msg:contains(' synthesized ') and not msg:contains('You synthesized '));
-
-    if (k) then
-        return true;
-    end
-
-    -- Find failed synthesis..
-    k = (msg:contains(' lost ') and not msg:contains('You lost '));
-
-    if (k) then
-        return true;
-    end
-
-    return false;
+    -- Find successful synthesis, then failed synthesis..
+    return ((msg:contains(' synthesized ') and not msg:contains('You synthesized '))
+        or (msg:contains(' lost ') and not msg:contains('You lost ')));
 end
 
 --[[
 * Determines if the message is a teleport request or advertisement.
 *
-* @param e - The chat event?
+* @param {table} e - The text_in event.
 * @return {bool} True if it's teleport related, otherwise false.
 --]]
 local function is_teleport(e)
     local msg = clean_str(e.message_modified);
 
-    -- Find a auto-translate teleports..
-    local k, _ = hush.teleports:find_if(function (v, _)
-        if (msg:contains(v)) then
-            return true;
-        end
-        return false;
-    end);
-
-    if (k) then
-        return true;
-    end
-
-    -- Find taxi teleports..
-    return (msg:contains('Dem') and msg:contains('Holla') and msg:contains('Mea'));
+    -- Find auto-translate teleports, then taxi teleports..
+    return (hush.teleports:any(function (v)
+            return msg:contains(v);
+        end)
+        or (msg:contains('Dem') and msg:contains('Holla') and msg:contains('Mea')));
 end
 
 --[[
 * Determines if the message is a Eco-Warrior request or advertisement.
 *
-* @param e - The chat event?
+* @param {table} e - The text_in event.
 * @return {bool} True if it's Eco-Warrior related, otherwise false.
 --]]
 local function is_ecowarrior(e)
     local msg = clean_str(e.message_modified);
-    local k = false;
 
     -- Find the word "eco" at the start of a word, so not inside "second" or "become"..
-    k = (msg:lower():match('%f[%a]eco') and not contains_name(e));
-
-    if (k) then
-        return true;
-    end
-
-    return false;
+    return (msg:lower():match('%f[%a]eco') ~= nil and not contains_name(e));
 end
 
 --[[
 * Determines if the message is a Highwind shout.
 *
-* @param e - The chat event?
+* @param {table} e - The text_in event.
 * @return {bool} True if it's Highwind related, otherwise false.
 --]]
 local function is_highwind(e)
-    local msg = clean_str(e.message_modified);
-    local k = false;
+    local msg = clean_str(e.message_modified):lower();
 
     -- Find the word "highwind", hopefully including if it's misspelled or split ("high wind"),
     -- but only where "hi" starts a word, so not "this Wind Crystal" or a "Name[WindWoods]: " yell..
-    k = ((msg:lower():match('%f[%a]hi%a*%s?wind') or msg:lower():match(' hw')) and not contains_name(e));
-
-    if (k) then
-        return true;
-    end
-
-    return false;
+    return ((msg:match('%f[%a]hi%a*%s?wind') or msg:match(' hw')) ~= nil and not contains_name(e));
 end
 
 --[[
 * Determines if the message is a Goblin Merrymaker.
 *
-* @param e - The chat event?
+* @param {table} e - The text_in event.
 * @return {bool} True if it's a Goblin Merrymaker, otherwise false.
 --]]
 local function is_merrymaker(e)
     local msg = clean_str(e.message_modified);
-    local k = false;
 
     -- Find the NPC name..
-    k = (msg:contains('Goblin Merrymaker'));
-
-    if (k) then
-        return true;
-    end
-
-    return false;
+    return msg:contains('Goblin Merrymaker');
 end
 
 --[[
@@ -482,9 +414,8 @@ ashita.events.register('command', 'command_cb', function (e)
     -- Block all hush related commands..
     e.blocked = true;
 
-    -- Handle: /hush - Shows the addon help.
+    -- Handle: /hush - Opens or closes the configuration window.
     if (#args == 1) then
-        --print_help(false);
         hush.guiOpen[1] = (not hush.guiOpen[1]);
         return;
     end
@@ -581,23 +512,23 @@ ashita.events.register('text_in', 'text_in_cb', function (e)
     if (cm == 44 and hush.settings.defeats == true) then
         if(is_defeats(e)) then
             e.blocked = true;
-			return;
-		end
+            return;
+        end
     end
 
     -- Hush Goblin Merrymakers..
     if (cm == 142 and hush.settings.merrymaker == true) then
         if(is_merrymaker(e)) then
             e.blocked = true;
-			return;
-		end
+            return;
+        end
     end
 
     -- Hush command errors..
     if (cm == 157 and hush.settings.cmderror == true) then
         if(is_cmd_error(e)) then
             e.blocked = true;
-			return;
-		end
+            return;
+        end
     end
 end);
