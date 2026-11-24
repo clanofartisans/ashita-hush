@@ -21,7 +21,7 @@
 
 addon.name      = 'hush';
 addon.author    = 'Hugin';
-addon.version   = '1.5.3';
+addon.version   = '1.5.4';
 addon.desc      = 'Hides yells, teleport requests, Eco-Warrior, and other annoying messages.';
 addon.link      = 'https://github.com/clanofartisans/ashita-hush';
 
@@ -344,8 +344,8 @@ local function is_ecowarrior(e)
     local msg = clean_str(e.message_modified);
     local k = false;
 
-    -- Find the word "eco"..
-    k = ((e.message_modified:lower():contains('eco')) and not contains_name(e));
+    -- Find the word "eco" at the start of a word, so not inside "second" or "become"..
+    k = (msg:lower():match('%f[%a]eco') and not contains_name(e));
 
     if (k) then
         return true;
@@ -364,8 +364,9 @@ local function is_highwind(e)
     local msg = clean_str(e.message_modified);
     local k = false;
 
-    -- Find the word "highwind", hopefully including if it's misspelled..
-    k = ((e.message_modified:lower():match('hi.*wind') or e.message_modified:lower():match(' hw')) and not contains_name(e));
+    -- Find the word "highwind", hopefully including if it's misspelled or split ("high wind"),
+    -- but only where "hi" starts a word, so not "this Wind Crystal" or a "Name[WindWoods]: " yell..
+    k = ((msg:lower():match('%f[%a]hi%a*%s?wind') or msg:lower():match(' hw')) and not contains_name(e));
 
     if (k) then
         return true;
@@ -385,7 +386,7 @@ local function is_merrymaker(e)
     local k = false;
 
     -- Find the NPC name..
-    k = (e.message_modified:contains('Goblin Merrymaker'));
+    k = (msg:contains('Goblin Merrymaker'));
 
     if (k) then
         return true;
