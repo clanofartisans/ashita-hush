@@ -21,7 +21,7 @@
 
 addon.name      = 'hush';
 addon.author    = 'Hugin';
-addon.version   = '1.5.6';
+addon.version   = '1.6.0-b1';
 addon.desc      = 'Hides yells, teleport requests, Eco-Warrior, and other annoying messages.';
 addon.link      = 'https://github.com/clanofartisans/ashita-hush';
 
@@ -527,6 +527,9 @@ local function print_help(isError)
     local cmds = T{
         { '/hush', "Displays the addon's configuration window." },
         { '/hush help', "Displays the addon's help information." },
+        { '/hush debug', 'Records what Hush decides about each line of chat to a file.' },
+        { '/hush debug all', 'The same, for every chat mode.' },
+        { '/hush debug off', 'Stops recording.' },
     };
 
     -- Print the command list..
@@ -573,6 +576,19 @@ ashita.events.register('d3d_present', 'd3d_present_cb', function ()
                     debug_safely(debug_write, ('-- setting: %s %s'):fmt(v.key, hush.settings[v.key] and 'on' or 'off'));
                 end
             end
+        end
+
+        -- Debug mode; ticking "every chat mode" turns debug on too, and unticking debug clears both..
+        imgui.Separator();
+        if (imgui.Checkbox('Debug: record what Hush decides##HushDebugCheck', { hush.debug.on })) then
+            if (hush.debug.on) then
+                debug_stop();
+            else
+                debug_safely(debug_start, false);
+            end
+        end
+        if (imgui.Checkbox('...for every chat mode##HushDebugAllCheck', { hush.debug.all })) then
+            debug_safely(debug_start, not hush.debug.all);
         end
         imgui.End();
     end
