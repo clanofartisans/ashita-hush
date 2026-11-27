@@ -312,6 +312,206 @@ end
 hush.settings = settings.load(default_settings);
 
 --[[
+* Debug mode records what Hush decides about each line of chat to a file, to help with "I'm still
+* seeing X" reports. It's never saved, so it ends on a reload, logout or character switch.
+--]]
+hush.debug = T{
+    on   = false,   -- Recording..
+    all  = false,   -- ..every chat mode, not only the ones Hush's filters run on..
+    path = nil,     -- The current record..
+    zone = nil,     -- The zone last written to it..
+};
+
+-- The chat modes Hush's filters run on..
+hush.modes = T{};
+for _, v in ipairs(hush.filters) do
+    for _, m in ipairs(v.modes) do
+        if (not hush.modes:contains(m)) then
+            hush.modes:append(m);
+        end
+    end
+end
+
+--[[
+* Returns a zone's id and name, as in "245 Lower Jeuno".
+*
+* @param {number} zone - The zone id.
+* @return {string} The zone's id and name.
+--]]
+local function zone_name(zone)
+    return ('%d %s'):fmt(zone, AshitaCore:GetResourceManager():GetString('zones.names', zone) or '(unknown)');
+end
+
+--[[
+* Appends a line to the debug record. A failure raises an error; run it through debug_safely.
+*
+* @param {string} line - The line to write.
+--]]
+local function debug_write(line)
+    local f = assert(io.open(hush.debug.path, 'a'));
+    f:write(line .. '\n');
+    f:close();
+end
+
+--[[
+* Returns which chat modes the debug record covers, in words.
+*
+* @return {string} The scope.
+--]]
+local function debug_scope()
+    return hush.debug.all and 'every chat mode' or 'Hush\'s chat modes';
+end
+
+--[[
+* Stops debug mode, if it's on.
+*
+* @param {string} reason - Why it stopped, when it wasn't asked to. (Optional.)
+--]]
+local function debug_stop(reason)
+    if (not hush.debug.on) then
+        return;
+    end
+
+    hush.debug.on = false;
+    hush.debug.all = false;
+    pcall(debug_write, '-- stopped: ' .. os.date('%Y-%m-%d %H:%M:%S'));
+
+    local msg = (reason ~= nil) and ('Debug off (%s). The record is '):fmt(reason) or 'Debug off. The record is ';
+    print(chat.header(addon.name):append(chat.message(msg)):append(chat.success(hush.debug.path)));
+end
+
+--[[
+* Runs a debug function so that a failure in it switches debug off instead of raising an error,
+* so debug mode can never get in the way of hushing.
+*
+* @param {function} f - The function to run.
+* @param {any} ... - Its arguments.
+--]]
+local function debug_safely(f, ...)
+    local ok, err = pcall(f, ...);
+    if (not ok) then
+        if (hush.debug.on) then
+            debug_stop('error: ' .. tostring(err));
+        else
+            print(chat.header(addon.name):append(chat.error('Debug couldn\'t start: ' .. tostring(err))));
+        end
+    end
+end
+
+--[[
+* Starts debug mode, or changes which chat modes it covers if it's already on.
+*
+* @param {boolean} all - True to record every chat mode, false for only the ones Hush's filters run on.
+--]]
+local function debug_start(all)
+    if (hush.debug.on) then
+        if (hush.debug.all ~= all) then
+            hush.debug.all = all;
+            debug_write('-- scope: ' .. debug_scope());
+        end
+    else
+        local name = partyMgr:GetMemberName(0);
+        if (name == nil or name:len() == 0) then
+            print(chat.header(addon.name):append(chat.error('Log in to a character before turning debug on.')));
+            return;
+        end
+
+        local dir = ('%s\\config\\addons\\%s\\debug\\'):fmt(AshitaCore:GetInstallPath(), addon.name);
+        if (not ashita.fs.exists(dir)) then
+            ashita.fs.create_dir(dir);
+        end
+
+        hush.debug.path = ('%s%s_%s.log'):fmt(dir, name, os.date('%Y.%m.%d_%H%M%S'));
+        hush.debug.all = all;
+        hush.debug.zone = get_zone() or 0;
+
+        -- Every filter, on or off..
+        local filters = T{};
+        for _, v in ipairs(hush.filters) do
+            filters:append(('%s %s'):fmt(v.key, (hush.settings[v.key] == true) and 'on' or 'off'));
+        end
+
+        -- The loaded addons in Ashita's order, with their versions, where this Ashita can list them..
+        local addons = T{};
+        if (AddonManager == nil) then
+            addons:append('(AddonManager unavailable)');
+        else
+            for n = 0, AddonManager:Count() - 1 do
+                local a = AddonManager:Get(n);
+                if (a ~= nil) then
+                    local ok, ver = pcall(function () return AddonManager:GetVersion(a); end);
+                    addons:append(('%s %s'):fmt(a, ok and tostring(ver) or '(no version)'));
+                end
+            end
+        end
+
+        debug_write(('-- Hush %s debug record'):fmt(addon.version));
+        debug_write('-- started: ' .. os.date('%Y-%m-%d %H:%M:%S'));
+        debug_write('-- character: ' .. name);
+        debug_write('-- zone: ' .. zone_name(hush.debug.zone));
+        debug_write('-- scope: ' .. debug_scope());
+        debug_write('-- filters: ' .. table.concat(filters, ', '));
+        debug_write('-- addons: ' .. table.concat(addons, ', '));
+        hush.debug.on = true;
+    end
+
+    print(chat.header(addon.name):append(chat.message(('Debug on (%s). Recording to '):fmt(debug_scope()))):append(chat.success(hush.debug.path)));
+end
+
+--[[
+* Writes a chat line, and what Hush decided about it, to the debug record.
+*
+* @param {table} e - The text_in event.
+* @param {number} cm - The line's chat mode.
+* @param {boolean} pre - True if another addon had blocked the line before Hush saw it.
+* @param {string} exempt - 'gm' or 'hardcore' if the line is never hushed, otherwise nil.
+* @param {table} hushed - The filter that hushed the line, otherwise nil.
+--]]
+local function debug_line(e, cm, pre, exempt, hushed)
+    local watched = hush.modes:contains(cm);
+    if (not watched and not hush.debug.all) then
+        return;
+    end
+
+    -- A "-- zone:" line first, if the zone has changed..
+    local zone = get_zone() or 0;
+    if (zone ~= hush.debug.zone) then
+        hush.debug.zone = zone;
+        debug_write('-- zone: ' .. zone_name(zone));
+    end
+
+    -- Every other filter on this chat mode that matches the line, on or off..
+    local matches = T{};
+    if (watched) then
+        for _, v in ipairs(hush.filters) do
+            if (v ~= hushed and v.modes:contains(cm) and v.test(e)) then
+                matches:append(('%s %s'):fmt(v.key, (hush.settings[v.key] == true) and 'on' or 'off'));
+            end
+        end
+    end
+
+    -- The verdict; a line on a chat mode no filter runs on gets none..
+    local verdict = '';
+    if (exempt ~= nil) then
+        verdict = 'exempt: ' .. exempt;
+    elseif (hushed ~= nil) then
+        verdict = 'hushed: ' .. hushed.key;
+    elseif (watched) then
+        verdict = 'shown';
+    end
+    if (#matches > 0) then
+        verdict = verdict .. ((verdict == 'shown') and ': ' or '; ') .. table.concat(matches, ', ');
+    end
+    if (pre) then
+        verdict = (verdict:len() > 0) and ('pre-blocked; ' .. verdict) or 'pre-blocked';
+    end
+
+    -- One line per entry, so line breaks in the text are written as "\n"..
+    local text = clean_str(e.message_modified):gsub('\r', ''):gsub('[\n\7]', '\\n');
+    debug_write(('[%s] %-5s %-28s | %s'):fmt(os.date('%H:%M:%S'), ('[%d]'):fmt(cm), verdict, text));
+end
+
+--[[
 * Prints the addon help information.
 *
 * @param {boolean} isError - Flag if this function was invoked due to an error.
@@ -344,6 +544,7 @@ local function update_settings(s)
     -- Update the settings table..
     if (s ~= nil) then
         hush.settings = s;
+        debug_stop('character changed or logged out');
     end
 
     -- Save the current settings..
@@ -367,6 +568,10 @@ ashita.events.register('d3d_present', 'd3d_present_cb', function ()
             if (imgui.Checkbox(('%s##%s'):fmt(v.label, v.id), { hush.settings[v.key] })) then
                 hush.settings[v.key] = not hush.settings[v.key];
                 update_settings();
+
+                if (hush.debug.on) then
+                    debug_safely(debug_write, ('-- setting: %s %s'):fmt(v.key, hush.settings[v.key] and 'on' or 'off'));
+                end
             end
         end
         imgui.End();
@@ -399,6 +604,24 @@ ashita.events.register('command', 'command_cb', function (e)
         return;
     end
 
+    -- Handle: /hush debug [all | off] - Records what Hush decides to a file, or stops..
+    if (args[2]:any('debug')) then
+        if (#args == 2) then
+            debug_safely(debug_start, false);
+        elseif (#args == 3 and args[3]:any('all')) then
+            debug_safely(debug_start, true);
+        elseif (#args == 3 and args[3]:any('off')) then
+            if (hush.debug.on) then
+                debug_stop();
+            else
+                print(chat.header(addon.name):append(chat.message('Debug is already off.')));
+            end
+        else
+            print_help(true);
+        end
+        return;
+    end
+
     -- Unhandled: Print help information..
     print_help(true);
 end);
@@ -409,22 +632,41 @@ end);
 --]]
 ashita.events.register('text_in', 'text_in_cb', function (e)
     local cm = bit.band(e.mode,  0x000000FF);
+    local pre = (e.blocked == true);
 
-    -- Never hush a GM's shouts or /yells..
+    -- Never hush a GM's shouts or /yells, or a hardcore-death announcement..
+    local exempt = nil;
     if ((cm == 10 or cm == 11) and is_gm(e)) then
-        return;
+        exempt = 'gm';
+    elseif (cm == 10 and is_hardcore_death(e)) then
+        exempt = 'hardcore';
     end
 
-    -- Never hush a hardcore-death announcement..
-    if (cm == 10 and is_hardcore_death(e)) then
-        return;
-    end
-
-    -- Hush the line if any filter that's on, and runs on its chat mode, matches it..
-    for _, v in ipairs(hush.filters) do
-        if (hush.settings[v.key] == true and v.modes:contains(cm) and v.test(e)) then
-            e.blocked = true;
-            return;
+    -- Otherwise, hush the line if any filter that's on, and runs on its chat mode, matches it..
+    local hushed = nil;
+    if (exempt == nil) then
+        for _, v in ipairs(hush.filters) do
+            if (hush.settings[v.key] == true and v.modes:contains(cm) and v.test(e)) then
+                hushed = v;
+                e.blocked = true;
+                break;
+            end
         end
+    end
+
+    -- Record the decision, if debug is on..
+    if (hush.debug.on) then
+        debug_safely(debug_line, e, cm, pre, exempt, hushed);
+    end
+end);
+
+--[[
+* event: packet_in
+* desc : Event called when the addon is processing incoming packets.
+--]]
+ashita.events.register('packet_in', 'packet_in_cb', function (e)
+    -- Packet: Zone Exit, to the title screen (a logout), which ends debug mode..
+    if (e.id == 0x000B and struct.unpack('b', e.data, 0x04 + 0x01) == 1) then
+        debug_stop('logged out');
     end
 end);
