@@ -21,7 +21,7 @@
 
 addon.name      = 'hush';
 addon.author    = 'Hugin';
-addon.version   = '1.6.0-b1';
+addon.version   = '1.6.0-b2';
 addon.desc      = 'Hides yells, teleport requests, Eco-Warrior, and other annoying messages.';
 addon.link      = 'https://github.com/clanofartisans/ashita-hush';
 
@@ -223,8 +223,10 @@ end
 local function is_synth(e)
     local msg = clean_str(e.message_modified);
 
-    -- Find successful synthesis, then failed synthesis..
+    -- Find successful synthesis, then "Name obtained …" (seen since August 2026; the player's own
+    -- form is unknown, so a line with the player's name stays), then failed synthesis..
     return ((msg:contains(' synthesized ') and not msg:contains('You synthesized '))
+        or (msg:contains(' obtained ') and not msg:contains('You obtained ') and not contains_name(e))
         or (msg:contains(' lost ') and not msg:contains('You lost ')));
 end
 
