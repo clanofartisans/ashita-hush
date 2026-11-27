@@ -31,21 +31,6 @@ local imgui = require('imgui');
 local settings = require('settings');
 local partyMgr = AshitaCore:GetMemoryManager():GetParty();
 
--- Default Settings
-local default_settings = T{
-    remote     = false,
-    hushLocal  = false,
-    teleport   = false,
-    ecowarrior = false,
-    highwind   = false,
-    synth      = false,
-    fish       = false,
-    allshouts  = false,
-    defeats    = false,
-    cmderror   = false,
-    merrymaker = false
-};
-
 -- Hush Variables
 local hush = T{
     --[[
@@ -93,7 +78,6 @@ local hush = T{
         '{Teleport-Yhoat}',
         '{Teleport-Vahzl}'
     },
-    settings = settings.load(default_settings),
     guiOpen = { false }
 };
 
@@ -301,6 +285,33 @@ local function is_merrymaker(e)
 end
 
 --[[
+* The filters, in the settings window's order. Each has its settings key, its checkbox label and
+* ImGui id, the chat modes it runs on and its test. The settings keys are saved per character, so
+* never rename one (hushLocal included).
+--]]
+hush.filters = T{
+    { key = 'remote',     label = 'Hush remote /yells',                   id = 'HushRemoteCheck',     modes = T{ 11 },     test = function (e) return not is_local(e); end },
+    { key = 'hushLocal',  label = 'Hush local /yells',                    id = 'HushLocalCheck',      modes = T{ 11 },     test = is_local },
+    { key = 'teleport',   label = 'Hush teleport shouts/yells',           id = 'HushTeleportCheck',   modes = T{ 10, 11 }, test = is_teleport },
+    { key = 'ecowarrior', label = 'Hush Eco-Warrior shouts/yells',        id = 'HushEcoWarriorCheck', modes = T{ 10, 11 }, test = is_ecowarrior },
+    { key = 'highwind',   label = 'Hush Highwind shouts/yells',           id = 'HushHighwindCheck',   modes = T{ 10, 11 }, test = is_highwind },
+    { key = 'allshouts',  label = 'Hush all shouts',                      id = 'HushAllShoutsCheck',  modes = T{ 10 },     test = function () return true; end },
+    { key = 'synth',      label = 'Hush others\' synthesis results',      id = 'HushSynthCheck',      modes = T{ 121 },    test = is_synth },
+    { key = 'fish',       label = 'Hush others\' fishing results',        id = 'HushFishCheck',       modes = T{ 142 },    test = is_fish },
+    { key = 'defeats',    label = 'Hush others\' defeated enemies',       id = 'HushDefeatsCheck',    modes = T{ 44 },     test = is_defeats },
+    { key = 'merrymaker', label = 'Hush Goblin Merrymakers',              id = 'HushMerrymakerCheck', modes = T{ 142 },    test = is_merrymaker },
+    { key = 'cmderror',   label = 'Hush "command errors" (experimental)', id = 'HushCmdErrCheck',     modes = T{ 157 },    test = is_cmd_error },
+};
+
+-- Default Settings: every filter off..
+local default_settings = T{};
+for _, v in ipairs(hush.filters) do
+    default_settings[v.key] = false;
+end
+
+hush.settings = settings.load(default_settings);
+
+--[[
 * Prints the addon help information.
 *
 * @param {boolean} isError - Flag if this function was invoked due to an error.
@@ -352,49 +363,11 @@ ashita.events.register('d3d_present', 'd3d_present_cb', function ()
     if (not hush.guiOpen[1]) then return end
 
     if (imgui.Begin('Hush Settings##HushSettingsWindow', hush.guiOpen, ImGuiWindowFlags_AlwaysAutoResize)) then
-        if imgui.Checkbox('Hush remote /yells##HushRemoteCheck', { hush.settings.remote }) then
-            hush.settings.remote = not hush.settings.remote;
-            update_settings();
-        end
-        if imgui.Checkbox('Hush local /yells##HushLocalCheck', { hush.settings.hushLocal }) then
-            hush.settings.hushLocal = not hush.settings.hushLocal;
-            update_settings();
-        end
-        if imgui.Checkbox('Hush teleport shouts/yells##HushTeleportCheck', { hush.settings.teleport }) then
-            hush.settings.teleport = not hush.settings.teleport;
-            update_settings();
-        end
-        if imgui.Checkbox('Hush Eco-Warrior shouts/yells##HushEcoWarriorCheck', { hush.settings.ecowarrior }) then
-            hush.settings.ecowarrior = not hush.settings.ecowarrior;
-            update_settings();
-        end
-        if imgui.Checkbox('Hush Highwind shouts/yells##HushHighwindCheck', { hush.settings.highwind }) then
-            hush.settings.highwind = not hush.settings.highwind;
-            update_settings();
-        end
-        if imgui.Checkbox('Hush all shouts##HushAllShoutsCheck', { hush.settings.allshouts }) then
-            hush.settings.allshouts = not hush.settings.allshouts;
-            update_settings();
-        end
-        if imgui.Checkbox('Hush others\' synthesis results##HushSynthCheck', { hush.settings.synth }) then
-            hush.settings.synth = not hush.settings.synth;
-            update_settings();
-        end
-        if imgui.Checkbox('Hush others\' fishing results##HushFishCheck', { hush.settings.fish }) then
-            hush.settings.fish = not hush.settings.fish;
-            update_settings();
-        end
-        if imgui.Checkbox('Hush others\' defeated enemies##HushDefeatsCheck', { hush.settings.defeats }) then
-            hush.settings.defeats = not hush.settings.defeats;
-            update_settings();
-        end
-        if imgui.Checkbox('Hush Goblin Merrymakers##HushMerrymakerCheck', { hush.settings.merrymaker }) then
-            hush.settings.merrymaker = not hush.settings.merrymaker;
-            update_settings();
-        end
-        if imgui.Checkbox('Hush "command errors" (experimental)##HushCmdErrCheck', { hush.settings.cmderror }) then
-            hush.settings.cmderror = not hush.settings.cmderror;
-            update_settings();
+        for _, v in ipairs(hush.filters) do
+            if (imgui.Checkbox(('%s##%s'):fmt(v.label, v.id), { hush.settings[v.key] })) then
+                hush.settings[v.key] = not hush.settings[v.key];
+                update_settings();
+            end
         end
         imgui.End();
     end
@@ -447,86 +420,9 @@ ashita.events.register('text_in', 'text_in_cb', function (e)
         return;
     end
 
-    -- Hush all shouts..
-    if (cm == 10 and hush.settings.allshouts == true) then
-        e.blocked = true;
-        return;
-    end
-
-    -- Hush /shouted teleports..
-    if ((cm == 10 or cm == 11) and hush.settings.teleport == true) then
-        if(is_teleport(e)) then
-            e.blocked = true;
-            return;
-        end
-    end
-
-    -- Hush Eco-Warrior..
-    if ((cm == 10 or cm == 11) and hush.settings.ecowarrior == true) then
-        if(is_ecowarrior(e)) then
-            e.blocked = true;
-            return;
-        end
-    end
-
-    -- Hush Highwind..
-    if ((cm == 10 or cm == 11) and hush.settings.highwind == true) then
-        if(is_highwind(e)) then
-            e.blocked = true;
-            return;
-        end
-    end
-
-    -- Hush /yelled messages..
-    if (cm == 11) then
-        -- Hush remote /yells..
-        if (hush.settings.remote == true and not is_local(e)) then
-            e.blocked = true;
-            return;
-        end
-
-        -- Hush local /yells..
-        if (hush.settings.hushLocal == true and is_local(e)) then
-            e.blocked = true;
-            return;
-        end
-    end
-
-    -- Hush others' synthesis results..
-    if (cm == 121 and hush.settings.synth == true) then
-        if(is_synth(e)) then
-            e.blocked = true;
-            return;
-        end
-    end
-
-    -- Hush others' fishing results..
-    if (cm == 142 and hush.settings.fish == true) then
-        if(is_fish(e)) then
-            e.blocked = true;
-            return;
-        end
-    end
-
-    -- Hush others' defeated enemies..
-    if (cm == 44 and hush.settings.defeats == true) then
-        if(is_defeats(e)) then
-            e.blocked = true;
-            return;
-        end
-    end
-
-    -- Hush Goblin Merrymakers..
-    if (cm == 142 and hush.settings.merrymaker == true) then
-        if(is_merrymaker(e)) then
-            e.blocked = true;
-            return;
-        end
-    end
-
-    -- Hush command errors..
-    if (cm == 157 and hush.settings.cmderror == true) then
-        if(is_cmd_error(e)) then
+    -- Hush the line if any filter that's on, and runs on its chat mode, matches it..
+    for _, v in ipairs(hush.filters) do
+        if (hush.settings[v.key] == true and v.modes:contains(cm) and v.test(e)) then
             e.blocked = true;
             return;
         end
