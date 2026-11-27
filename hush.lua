@@ -21,7 +21,7 @@
 
 addon.name      = 'hush';
 addon.author    = 'Hugin';
-addon.version   = '1.6.0';
+addon.version   = '1.7.0';
 addon.desc      = 'Hides yells, teleport requests, Eco-Warrior, and other annoying messages.';
 addon.link      = 'https://github.com/clanofartisans/ashita-hush';
 
@@ -145,6 +145,18 @@ local function is_defeats(e)
 end
 
 --[[
+* Determines if the message is another player's emote. Every line on the emote mode is someone's
+* emote, so only the player's own and those aimed at the player are kept.
+*
+* @param {table} e - The text_in event.
+* @return {bool} True if the message is another player's emote, otherwise false.
+--]]
+local function is_emote(e)
+    -- Find others' emotes, except those aimed at the player..
+    return (not contains_name(e));
+end
+
+--[[
 * Determines if the message is another player's fishing result.
 *
 * @param {table} e - The text_in event.
@@ -170,6 +182,20 @@ local function is_gm(e)
     local sender = msg:match('^(.-) ?: ');
 
     return (sender ~= nil and sender:contains('[GM]'));
+end
+
+--[[
+* Determines if the emote was made by a GM, as in "[GM]Name makes like a tree…". An emote has no
+* ": " sender, and its text is free, so a player's "/em [GM]: hi" would fool is_gm. But an emote
+* starts with the actor's name, and player names are letters only, so only a GM's starts "[GM]".
+*
+* @param {table} e - The text_in event.
+* @return {bool} True if a GM made the emote, otherwise false.
+--]]
+local function is_gm_emote(e)
+    local msg = clean_str(e.message_modified);
+
+    return (msg:match('^%[GM%]') ~= nil);
 end
 
 --[[
@@ -212,6 +238,21 @@ local function is_local(e)
     return town.tags:any(function (v)
         return msg:contains(v);
     end);
+end
+
+--[[
+* Determines if the message is another player's /random roll: "Dice roll! Name rolls 657!". The
+* player's own rolls come in the same shape, so the roller's name is compared with the player's.
+*
+* @param {table} e - The text_in event.
+* @return {bool} True if someone else's roll, otherwise false.
+--]]
+local function is_random(e)
+    local msg = clean_str(e.message_modified);
+    local roller = msg:match('^Dice roll! (%a+) rolls %d+!');
+
+    -- Find others' rolls..
+    return (roller ~= nil and roller ~= partyMgr:GetMemberName(0));
 end
 
 --[[
@@ -302,6 +343,8 @@ hush.filters = T{
     { key = 'fish',       label = 'Hush others\' fishing results',        id = 'HushFishCheck',       modes = T{ 142 },    test = is_fish },
     { key = 'defeats',    label = 'Hush others\' defeated enemies',       id = 'HushDefeatsCheck',    modes = T{ 44 },     test = is_defeats },
     { key = 'merrymaker', label = 'Hush Goblin Merrymakers',              id = 'HushMerrymakerCheck', modes = T{ 142 },    test = is_merrymaker },
+    { key = 'random',     label = 'Hush others\' /random rolls',          id = 'HushRandomCheck',     modes = T{ 121 },    test = is_random },
+    { key = 'emote',      label = 'Hush others\' emotes',                 id = 'HushEmoteCheck',      modes = T{ 15 },     test = is_emote },
     { key = 'cmderror',   label = 'Hush "command errors" (experimental)', id = 'HushCmdErrCheck',     modes = T{ 157 },    test = is_cmd_error },
 };
 
@@ -652,9 +695,11 @@ ashita.events.register('text_in', 'text_in_cb', function (e)
     local cm = bit.band(e.mode,  0x000000FF);
     local pre = (e.blocked == true);
 
-    -- Never hush a GM's shouts or /yells, or a hardcore-death announcement..
+    -- Never hush a GM's shouts, /yells or emotes, or a hardcore-death announcement..
     local exempt = nil;
     if ((cm == 10 or cm == 11) and is_gm(e)) then
+        exempt = 'gm';
+    elseif (cm == 15 and is_gm_emote(e)) then
         exempt = 'gm';
     elseif (cm == 10 and is_hardcore_death(e)) then
         exempt = 'hardcore';

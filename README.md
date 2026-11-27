@@ -6,7 +6,7 @@ Install to your addons folder (e.g. `.\HorizonXI\Game\addons\hush\hush.lua`).
 ## Usage
 * `/hush`: Opens a GUI with options for filtering certain messages.
 
-GM shouts and yells, and HorizonXI's hardcore-death announcements, are never hushed, even with "Hush all shouts" turned on.
+GM shouts, yells and emotes, and HorizonXI's hardcore-death announcements, are never hushed, even with "Hush all shouts" turned on.
 
 ## Using other chat addons
 If you use an addon that shows chat in its own window, such as FancyChat, load Hush **before** it in your Ashita default script. Otherwise that addon picks up each message before Hush gets a chance to hush it.
